@@ -19,7 +19,7 @@ import jdk.internal.org.objectweb.asm.Opcodes;
 // java --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED NestMateTidyUp.java
 
 public class NestMateTidyUp {
-	
+
 	private static class MemberRef {
 		private final HashSet<String> callerNestHostSet = new HashSet<>();
 
@@ -34,13 +34,13 @@ public class NestMateTidyUp {
 			}
 		}
 	}
-	
+
 	private static class ClassRef {
 		private final String supertype;
 		private final String nestHost;
 		private final String source;
 		private final Map<String, MemberRef> memberMap;
-		
+
 		public ClassRef(String supertype, String nestHost, String source, Map<String, MemberRef> memberMap) {
 			this.supertype = supertype;
 			this.nestHost = Objects.requireNonNull(nestHost);
@@ -52,7 +52,7 @@ public class NestMateTidyUp {
 			var memberRef = memberMap.get(nameAndDesc);
 			if (memberRef == null) {
 				if (field) {
-				  return;
+					return;
 				}
 				var supertypeRef = repository.classRefMap.get(supertype);
 				if (supertypeRef == null) {
@@ -70,10 +70,10 @@ public class NestMateTidyUp {
 			});
 		}
 	}
-	
+
 	private static class Repository {
 		private final HashMap<String, ClassRef> classRefMap = new HashMap<>();
-		
+
 		private void add(String className, ClassRef classRef) {
 			classRefMap.put(className, classRef);
 		}
@@ -81,7 +81,7 @@ public class NestMateTidyUp {
 		private Optional<ClassRef> classRef(String className) {
 			return Optional.ofNullable(classRefMap.get(className));
 		}
-		
+
 		private void addCaller(ClassRef caller, String owner, String nameAndDesc, boolean field) {
 			var classRef = classRefMap.get(owner);
 			if (classRef == null) {
@@ -89,22 +89,22 @@ public class NestMateTidyUp {
 			}
 			classRef.addCaller(caller, this, nameAndDesc, field);
 		}
-		
+
 		private void printLooslyAccessibleMembers() {
 			classRefMap.forEach((className, classRef) -> {
 				classRef.printLooslyAccessibleMembers(className);
 			});
 		}
 	}
-	
+
 	private static String mangleNameAndDesc(String name, String desc) {
 		return name + ' ' + desc;
 	}
-	
+
 	private static boolean isPackagePrivate(int modifier) {
 		return (modifier & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED)) == 0;
 	}
-	
+
 	private static String packaze(String className) {
 		var index = className.lastIndexOf('/');
 		if (index == -1) {
@@ -112,30 +112,30 @@ public class NestMateTidyUp {
 		}
 		return className.substring(0, index);
 	}
-	
+
 	private static boolean isSamePackage(String className1, String className2) {
 		return packaze(className1).equals(packaze(className2));
 	}
-	
+
 	private static void scan(ModuleReference moduleReference, Consumer<ClassReader> consumer) throws IOException {
-		try(var reader = moduleReference.open()) {
-			for(var filename: (Iterable<String>)reader.list()::iterator) {
+		try (var reader = moduleReference.open()) {
+			for (var filename : (Iterable<String>) reader.list()::iterator) {
 				if (filename.endsWith(".class")) {
-					try(var input = reader.open(filename).orElseThrow()) {
-					  var classReader = new ClassReader(input);
-					  consumer.accept(classReader);
+					try (var input = reader.open(filename).orElseThrow()) {
+						var classReader = new ClassReader(input);
+						consumer.accept(classReader);
 					}
 				}
 			}
 		}
 	}
-	
-  public static void main(String[] args) throws IOException {
+
+	public static void main(String[] args) throws IOException {
 		var finder = ModuleFinder.ofSystem();
 		var moduleRef = finder.find("java.base").orElseThrow();
-		
+
 		var repository = new Repository();
-		
+
 		scan(moduleRef, classReader -> {
 			var className = classReader.getClassName();
 			classReader.accept(new ClassVisitor(Opcodes.ASM7) {
@@ -155,28 +155,32 @@ public class NestMateTidyUp {
 				}
 
 				@Override
-				public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+				public void visit(int version, int access, String name, String signature, String superName,
+						String[] interfaces) {
 					if (superName != null && isSamePackage(className, superName)) {
 						supertype = superName;
 					}
 				}
-				
+
 				private void visitMember(int access, String name, String descriptor) {
 					if (isPackagePrivate(access)) {
-					  members.put(mangleNameAndDesc(name, descriptor), new MemberRef());
+						members.put(mangleNameAndDesc(name, descriptor), new MemberRef());
 					}
 				}
+
 				@Override
 				public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
 					visitMember(access, name, descriptor);
 					return null;
 				}
+
 				@Override
-				public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+				public MethodVisitor visitMethod(int access, String name, String descriptor, String signature,
+						String[] exceptions) {
 					visitMember(access, name, descriptor);
 					return null;
 				}
-				
+
 				@Override
 				public void visitEnd() {
 					var classRef = new ClassRef(supertype, nestHost, source, members);
@@ -184,7 +188,7 @@ public class NestMateTidyUp {
 				}
 			}, ClassReader.SKIP_CODE);
 		});
-		
+
 		scan(moduleRef, classReader -> {
 			var className = classReader.getClassName();
 			var classRef = repository.classRef(className).orElseThrow();
@@ -196,8 +200,10 @@ public class NestMateTidyUp {
 							repository.addCaller(classRef, owner, mangleNameAndDesc(name, descriptor), field);
 						}
 						private void visitHandle(Handle handle) {
-							visitMemberRef(handle.getOwner(), handle.getName(), handle.getDesc(), handle.getTag() <= Opcodes.H_PUTSTATIC);
+							visitMemberRef(handle.getOwner(), handle.getName(), handle.getDesc(),
+									handle.getTag() <= Opcodes.H_PUTSTATIC);
 						}
+
 						@Override
 						public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
 							visitMemberRef(owner, name, descriptor, true);
@@ -210,15 +216,15 @@ public class NestMateTidyUp {
 						@Override
 						public void visitLdcInsn(Object value) {
 							if (value instanceof Handle) {
-								visitHandle((Handle)value);
+								visitHandle((Handle) value);
 							}
 						}
 						@Override
 						public void visitInvokeDynamicInsn(String name, String descriptor, Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
 							visitHandle(bootstrapMethodHandle);
-							for(var value: bootstrapMethodArguments) {
+							for (var value : bootstrapMethodArguments) {
 								if (value instanceof Handle) {
-									visitHandle((Handle)value);
+									visitHandle((Handle) value);
 								}
 							}
 						}
@@ -226,7 +232,7 @@ public class NestMateTidyUp {
 				}
 			}, ClassReader.SKIP_FRAMES);
 		});
-		
+
 		repository.printLooslyAccessibleMembers();
 	}
 }
