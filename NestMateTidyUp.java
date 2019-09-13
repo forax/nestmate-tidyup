@@ -69,19 +69,6 @@ public class NestMateTidyUp {
 				memberRef.printLooslyAccessibleMembers(className, source, nestHost, nameAndType);
 			});
 		}
-		
-		/*
-		private List<String> findLooslyAccessibleMembers(Repository repository) {
-			var allowedNestHost = Set.of(this.nestHost);
-			return memberMap.entrySet().stream()
-					.filter(entry -> entry.getValue().isPackagePrivate())
-					.filter(entry -> entry.getValue().callerSet.stream()
-							.map(callerName -> repository.classRef(callerName).nestHost)
-							.collect(Collectors.toSet())
-									.equals(allowedNestHost))
-					.map(entry -> entry.getKey())
-					.collect(Collectors.toList());
-		}*/
 	}
 	
 	private static class Repository {
